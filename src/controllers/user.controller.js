@@ -3,6 +3,26 @@ import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js"; // [3] check if user there
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+
+const generateAccessAndRefreshTokens = async (userId) => {
+  // Define an asynchronous function that generates access and refresh tokens for a given user ID
+  try {
+    const user = await User.findById(userId); // Find the user by their ID
+    const accessToken = user.generateAccessToken; // Generate an access token for the user
+    const refreshToken = user.generateRefreshToken; // Generate a refresh token for the user
+
+    user.refreshToken = refreshToken; // Assign the refresh token to the user object
+    await user.save({ validateBeforeSave: false }); // Save the user object without validating before saving
+
+    return { accessToken, refreshToken }; // Return the generated access and refresh tokens
+  } catch (error) {
+    throw new ApiError(
+      500,
+      "Something went wrong while generating ref and access tokens"
+    ); // If an error occurs, throw an ApiError with status code 500 and a descriptive message
+  }
+};
+
 const registerUser = asyncHandler(async (req, res) => {
   // get user details from frontend
   // validation-not empty
@@ -98,7 +118,89 @@ const registerUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, createdUser, "User Registered Successfully"));
 });
 
-export { registerUser };
+const loginUser = asyncHandler(async (req, res) => {
+  // req body ->enter the user name and password from the password
+  // check if the user is registered
+  // if username and password is correct then load the avatar pfp
+  // access and refresh token will be sent to the user
+  // send cookie
+  // login successfully should be shown
+
+  const { email, username, password } = req.body;
+
+  if (!username || !email) {
+    throw new ApiError(400, "Username or email is required");
+  }
+
+  const user = User.findOne({
+    $or: [{ username }, { email }],
+  });
+
+  if (!user) {
+    throw new ApiError(404, "You do not exist");
+  }
+  // not capital User this is mongoose object
+  const isPasswordValid = await user.isPasswordCorrect(password);
+
+  if (!isPasswordValid) {
+    throw new ApiError(401, "Invalid user creds");
+  }
+
+  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+    user._id
+  );
+
+  const loggedInUser = await User.findById(user._id)
+    .findById(user._id)
+    .select("-password -refreshToken");
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken ", refreshToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accessToken,
+          refreshToken,
+        },
+        "User logged In Succesfully"
+      )
+    );
+});
+
+const logoutUser = asyncHandler(async (req, res) => {
+  await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $set: {
+        refreshToken: undefined,
+      },
+    },
+    {
+      new: true,
+    }
+  );
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "User logged Out"));
+});
+
+export { registerUser, loginUser, logoutUser };
 
 /*
 

@@ -1,7 +1,7 @@
 import { ApiError } from "../utils/ApiError.js"; // Import the ApiError class for handling API errors
 import { asyncHandler } from "../utils/asynchandler.js"; // Import the asyncHandler utility function
 import jwt from "jsonwebtoken"; // Import the jsonwebtoken library for JWT operations
-import { User } from "../models/user.model.js"; // Import the User model
+import { User } from "../models/user.model.js "; // Import the User model
 
 export const verifyJWT = asyncHandler(async (req, res, next) => {
   // Define an asynchronous function to verify JWT tokens using asyncHandler middleware
